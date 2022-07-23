@@ -13,18 +13,30 @@ const dbo = require("../db/conn");
 const ObjectId = require("mongodb").ObjectId;
 
 const timeslotSchema = new mongoose.Schema({
-  date: Date,
+  date: {
+    type: Date,
+  },
+});
+
+const userSchema = new mongoose.Schema({
+  firebaseid: { type: String },
+  timeslots: {
+    type: [Date],
+    default: [],
+  },
 });
 
 const Timeslot = mongoose.model("Timeslot", timeslotSchema);
+const User = mongoose.model("User", userSchema);
 
-// This section will help you get a list of all the records.
+// Gets the timeslots booked for the chosen date
 recordRoutes.route("/booking/get").get(function (req, res) {
   const filterBottom = new Date(req.query.date);
   const filterTop = new Date(filterBottom.getTime() + 24 * 60 * 60 * 1000); //next day exact same time
 
   const slot = [];
 
+  //Finds all timeslots booked for the chosen date and pushes it into the array "slot"
   Timeslot.find(
     { date: { $gte: filterBottom, $lte: filterTop } },
     function (err, bookedSlots) {
@@ -38,15 +50,51 @@ recordRoutes.route("/booking/get").get(function (req, res) {
   );
 });
 
+//Gets all bookings made by the user
+recordRoutes.route("/records/get").get(function (req, res) {
+  User.find(
+    {
+      firebaseid: req.query.firebaseid,
+    },
+    function (err, result) {
+      res.send(result);
+    }
+  );
+});
+
 // // This section will help you get a single record by id
 // recordRoutes.route("/record/:id").get(function (req, res) {
 // });
 
-// This section will help you create a new record.
+// Creates a new timeslot object to indicate it is booked. Also appends the timeslot into the user's timeslot array.
 recordRoutes.route("/booking/add").post(function (req, response) {
   const timeslot = new Timeslot({ date: req.body.date });
 
+  User.findOneAndUpdate(
+    { firebaseid: req.body.firebaseid },
+    {
+      $push: {
+        timeslots: [req.body.date],
+      },
+    },
+    (err) => {
+      console.log(err);
+    }
+  );
+
   timeslot.save();
+});
+
+// Creates a new user object for new users.
+recordRoutes.route("/users/login").post(async function (req, response) {
+  const id = req.body.firebaseid;
+  const user = await User.findOne({ firebaseid: id });
+  if (user) {
+    return;
+  } else {
+    const newUser = new User({ firebaseid: id, timeslots: [] });
+    newUser.save();
+  }
 });
 
 // This section will help you update a record by id.
